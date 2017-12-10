@@ -1,0 +1,154 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters" : {
+        "MysqlHost" : {
+            "Description": "MySQL hostname",
+            "Type": "String",
+            "Default": "localhost"
+        },
+        "MysqlPort" : {
+            "Description": "MySQL port",
+            "Type": "Number",
+            "Default": 3306
+        },
+        "MysqlDatabase" : {
+            "Description": "MySQL database/schema",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "MysqlUser" : {
+            "Description": "MySQL username",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "MysqlPassword" : {
+            "Description": "MySQL password",
+            "Type": "String",
+            "NoEcho": true
+        },
+        "DNSHostedZoneName": {
+            "Description": "HostedZoneName for DNS record",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "DNSName": {
+            "Description": "Name for DNS record",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "DNSAliasHostedZoneId": {
+            "Description": "HostedZoneId for alias DNS record",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "DNSAliasName": {
+            "Description": "Name for alias DNS record",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "ECSClusterName": {
+            "Description": "ECS Cluster Name",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "ECSHostPort": {
+            "Description": "Serposcope application port",
+            "Type": "Number",
+            "Default": 7134
+        },
+        "CloudWatchLogsGroup": {
+            "Description": "CloudWatchLogs group name",
+            "Type": "String",
+            "MinLength": 1
+        },
+        "SerposcopeDockerImage": {
+            "Description": "Serposcope Docker Image",
+            "Type": "String",
+            "MinLength": 1
+        }
+    },
+    "Resources": {
+        "SerposcopeRoute53Record": {
+            "Type" : "AWS::Route53::RecordSet",
+            "Properties" : {
+                "HostedZoneName": {"Ref": "DNSHostedZoneName"},
+                "Name": {"Ref": "DNSName"},
+                "Type" : "A",
+                "AliasTarget": {
+                    "DNSName": {"Ref": "DNSAliasName"},
+                    "HostedZoneId": {"Ref": "DNSAliasHostedZoneId"}
+                }
+            }
+        },
+        "SerposcopeECSService": {
+            "Type" : "AWS::ECS::Service",
+            "Properties" : {
+                "Cluster" : {"Ref": "ECSClusterName"},
+                "DesiredCount": 1,
+                "TaskDefinition": {
+                    "Ref": "SerposcopeECSTaskDefinition"
+                }
+            }
+        },
+        "SerposcopeECSTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "ContainerDefinitions": [
+                    {
+                        "Environment": [
+                            {
+                              "Name": "MYSQL_HOST",
+                              "Value": {"Ref": "MysqlHost"}
+                            },
+                            {
+                              "Name": "MYSQL_PORT",
+                              "Value": {"Ref": "MysqlPort"}
+                            },
+                            {
+                              "Name": "MYSQL_DB",
+                              "Value": {"Ref": "MysqlDatabase"}
+                            },
+                            {
+                              "Name": "MYSQL_USER",
+                              "Value": {"Ref": "MysqlUser"}
+                            },
+                            {
+                              "Name": "MYSQL_PASSWORD",
+                              "Value": {"Ref": "MysqlPassword"}
+                            }
+                        ],
+                        "Image": {"Ref": "SerposcopeDockerImage"},
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-region": "us-east-1",
+                                "awslogs-group": {"Ref": "CloudWatchLogsGroup"}
+                            }
+                        },
+                        "Memory": 1024,
+                        "MemoryReservation": 180,
+                        "Name": "serposcope",
+                        "PortMappings": [
+                            {
+                              "ContainerPort": 7134,
+                              "HostPort": {"Ref": "ECSHostPort"}
+                            }
+                        ],
+                        "MountPoints": [
+                            {
+                                "ContainerPath": "/root/serposcope/logs",
+                                "SourceVolume": "serposcope-logs",
+                                "ReadOnly": false
+                            }
+                        ]
+                    }
+                ],
+                "Volumes": [
+                    {
+                        "Name": "serposcope-logs"
+                    }
+                ]
+            }
+        }
+    }
+}
